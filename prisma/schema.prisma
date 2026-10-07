@@ -1,0 +1,87 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  ADMIN
+  STAFF
+  DOCTOR
+}
+
+enum QueueStatus {
+  WAITING
+  CALLED
+  SERVING
+  COMPLETED
+  SKIPPED
+}
+
+model User {
+  id        String   @id @default(uuid())
+  username  String   @unique
+  name      String
+  password  String
+  role      Role     @default(STAFF)
+  isActive  Boolean  @default(true)
+  doctorId  String?
+  doctor    Doctor?  @relation(fields: [doctorId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+model Doctor {
+  id           String       @id @default(uuid())
+  nip          String?      @unique
+  name         String
+  specialty    String
+  polyRoom     String       // e.g., "Poli Umum", "Poli Gigi"
+  ticketPrefix String       // e.g., "A", "B", "C"
+  isActive     Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  quotas       DailyQuota[]
+  users        User[]
+
+  @@map("doctors")
+}
+
+model DailyQuota {
+  id          String   @id @default(uuid())
+  doctorId    String
+  date        DateTime @db.Date
+  sessionName String   @default("Pagi") // "Pagi" or "Sore"
+  totalQuota  Int
+  usedQuota   Int      @default(0)
+  isClosed    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  doctor      Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  queues      Queue[]
+
+  @@unique([doctorId, date, sessionName])
+  @@map("daily_quotas")
+}
+
+model Queue {
+  id          String      @id @default(uuid())
+  quotaId     String
+  queueNumber Int         // 1, 2, 3...
+  ticketCode  String      // "A-01", "B-02"
+  status      QueueStatus @default(WAITING)
+  callCount   Int         @default(0)
+  printedAt   DateTime    @default(now())
+  calledAt    DateTime?
+  servedAt    DateTime?
+  completedAt DateTime?
+  quota       DailyQuota  @relation(fields: [quotaId], references: [id], onDelete: Cascade)
+
+  @@index([quotaId, status])
+  @@map("queues")
+}
